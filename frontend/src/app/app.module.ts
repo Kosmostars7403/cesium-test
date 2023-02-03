@@ -1,5 +1,5 @@
+import {HttpClientModule} from '@angular/common/http';
 import {NgModule} from '@angular/core';
-import {FormsModule} from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 import {API_KEY} from './access.token';
 
@@ -13,7 +13,7 @@ import { CesiumDirective } from './cesium.directive';
   ],
   imports: [
     BrowserModule,
-    FormsModule,
+    HttpClientModule,
   ],
   providers: [
     {
