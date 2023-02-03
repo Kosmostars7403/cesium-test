@@ -20,8 +20,4 @@ app.add_middleware(
 @app.post("/")
 def upload_file(file: UploadFile = File()):
     geo_json_decode = kml2geojson.main.convert(file.file, '.')
-    feature = geo_json_decode[0]['features'][0]
-    return {
-        'coordinates': feature['geometry']['coordinates'],
-        'times': feature['properties']['times']
-    }
+    return geo_json_decode

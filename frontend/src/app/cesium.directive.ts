@@ -1,23 +1,28 @@
-import {Directive, ElementRef, Inject, OnDestroy, OnInit} from '@angular/core';
+import {Directive, ElementRef, Inject, NgZone, OnDestroy, OnInit} from '@angular/core';
 import {
   Cartesian3,
   Color,
   createOsmBuildings,
-  createWorldTerrain,
-  Ion, IonResource,
-  JulianDate, PathGraphics,
-  SampledPositionProperty, TimeInterval, TimeIntervalCollection, VelocityOrientationProperty,
+  createWorldTerrain, GeoJsonDataSource,
+  Ion,
+  JulianDate,
+  PathGraphics,
+  SampledPositionProperty,
+  TimeInterval,
+  TimeIntervalCollection,
   Viewer
 } from 'cesium';
-import {Subject, takeUntil} from 'rxjs';
+import {Subject, switchMap, takeUntil, tap} from 'rxjs';
 import {API_KEY} from './access.token';
 import {CesiumService} from './cesium.service';
-import {GeoResponse, Point, Times} from './models/geo-response.model';
+import {GeoResponse, Times} from './models/geo-response.model';
+
+const ANIMATION_FRAME_START = 27
 
 @Directive({
   selector: '[appCesium]'
 })
-export class CesiumDirective implements OnInit, OnDestroy{
+export class CesiumDirective implements OnInit, OnDestroy {
   viewer!: Viewer
 
   unsubscribe$ = new Subject()
@@ -25,19 +30,38 @@ export class CesiumDirective implements OnInit, OnDestroy{
   constructor(
     private el: ElementRef,
     private cesiumService: CesiumService,
+    private ngZone: NgZone,
     @Inject(API_KEY) private apiKey: string
   ) {
   }
 
   ngOnInit(): void {
-    this.initializeMap()
+    this.ngZone.runOutsideAngular(() => {
+      this.initializeMap()
 
-    this.cesiumService.geometry$
-      .pipe(takeUntil(this.unsubscribe$))
-      .subscribe(geometry => {
+
+    })
+
+    this.cesiumService.animate$.pipe(
+      switchMap(isAnimate => {
+        console.log(isAnimate)
         this.viewer.entities.removeAll();
-        this.drawTrajectory(geometry)
-      })
+        this.viewer.dataSources.removeAll();
+        if (isAnimate) {
+          return this.cesiumService.flight$.pipe(
+            //@ts-ignore
+            tap(geometry => this.drawTrajectory(geometry))
+          )
+        }
+        return this.cesiumService.geometry$
+          .pipe(tap(async (geometry) => {
+            const geoJSON = await GeoJsonDataSource.load(geometry, { clampToGround: true });
+            const dataSource = await this.viewer.dataSources.add(geoJSON);
+            await this.viewer.flyTo(dataSource);
+          }))
+      }),
+      takeUntil(this.unsubscribe$)
+    ).subscribe()
   }
 
   private initializeMap() {
@@ -55,17 +79,17 @@ export class CesiumDirective implements OnInit, OnDestroy{
     const positionProperty = this.setPointsPositionProperty({coordinates, times})
 
     const droneEntity = this.viewer.entities.add({
-      availability: new TimeIntervalCollection([ new TimeInterval(startStop) ]),
+      availability: new TimeIntervalCollection([new TimeInterval(startStop)]),
       position: positionProperty,
-      point: { pixelSize: 30, color: Color.GREENYELLOW },
-      path: new PathGraphics({ width: 3 })
+      point: {pixelSize: 30, color: Color.GREENYELLOW},
+      path: new PathGraphics({width: 3})
     });
 
     this.viewer.trackedEntity = droneEntity;
   }
 
   private setClock(times: Times) {
-    const start = JulianDate.fromIso8601(times[0]);
+    const start = JulianDate.fromIso8601(times[ANIMATION_FRAME_START]);
     const stop = JulianDate.fromIso8601(times.at(-1) ?? '');
     this.viewer.clock.startTime = start.clone();
     this.viewer.clock.stopTime = stop.clone();
@@ -80,7 +104,7 @@ export class CesiumDirective implements OnInit, OnDestroy{
   private setPointsPositionProperty({coordinates, times}: GeoResponse) {
     const positionProperty = new SampledPositionProperty();
 
-    for (let i = 0; i < coordinates.length; i++) {
+    for (let i = ANIMATION_FRAME_START; i < coordinates.length; i++) {
       const dataPoint = coordinates[i];
 
       const time = JulianDate.fromIso8601(times[i]);
@@ -89,7 +113,7 @@ export class CesiumDirective implements OnInit, OnDestroy{
       this.viewer.entities.add({
         description: `Location: (${dataPoint[0]}, ${dataPoint[1]}, ${dataPoint[2]})`,
         position: position,
-        point: { pixelSize: 10, color: Color.RED }
+        point: {pixelSize: 10, color: Color.RED}
       });
 
       positionProperty.addSample(time, position);

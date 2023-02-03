@@ -8,6 +8,8 @@ import {CesiumService} from './cesium.service';
 })
 export class AppComponent {
   kmlFile: File | null = null
+  animate$ = this.cesiumService.animate$
+  geometry$ = this.cesiumService.geometry$
 
   constructor(private cesiumService: CesiumService) {
   }
