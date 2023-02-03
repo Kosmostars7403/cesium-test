@@ -12,12 +12,12 @@ import {
   TimeIntervalCollection,
   Viewer
 } from 'cesium';
-import {Subject, switchMap, takeUntil, tap} from 'rxjs';
+import {of, Subject, switchMap, takeUntil, tap} from 'rxjs';
 import {API_KEY} from './access.token';
 import {CesiumService} from './cesium.service';
 import {GeoResponse, Times} from './models/geo-response.model';
 
-const ANIMATION_FRAME_START = 27
+const ANIMATION_FRAME_START = 28
 
 @Directive({
   selector: '[appCesium]'
@@ -38,19 +38,18 @@ export class CesiumDirective implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.ngZone.runOutsideAngular(() => {
       this.initializeMap()
-
-
     })
 
     this.cesiumService.animate$.pipe(
       switchMap(isAnimate => {
-        console.log(isAnimate)
         this.viewer.entities.removeAll();
         this.viewer.dataSources.removeAll();
         if (isAnimate) {
           return this.cesiumService.flight$.pipe(
-            //@ts-ignore
-            tap(geometry => this.drawTrajectory(geometry))
+            tap(geometry => {
+              if (!geometry) return of(null)
+              return this.drawTrajectory(geometry)
+            })
           )
         }
         return this.cesiumService.geometry$
@@ -75,6 +74,7 @@ export class CesiumDirective implements OnInit, OnDestroy {
   }
 
   private drawTrajectory({coordinates, times}: GeoResponse) {
+    console.log({coordinates, times})
     const startStop = this.setClock(times)
     const positionProperty = this.setPointsPositionProperty({coordinates, times})
 
@@ -95,7 +95,7 @@ export class CesiumDirective implements OnInit, OnDestroy {
     this.viewer.clock.stopTime = stop.clone();
     this.viewer.clock.currentTime = start.clone();
     this.viewer.timeline.zoomTo(start, stop);
-    this.viewer.clock.multiplier = 20;
+    this.viewer.clock.multiplier = 5;
     this.viewer.clock.shouldAnimate = true;
 
     return {start, stop}
