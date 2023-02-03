@@ -1,0 +1,8 @@
+<div appCesium></div>
+
+<input
+  type="file"
+  [(ngModel)]="kmlFile"
+>
+
+<button (click)="upload()" [disabled]="!kmlFile">Загрузить</button>
