@@ -74,7 +74,6 @@ export class CesiumDirective implements OnInit, OnDestroy {
   }
 
   private drawTrajectory({coordinates, times}: GeoResponse) {
-    console.log({coordinates, times})
     const startStop = this.setClock(times)
     const positionProperty = this.setPointsPositionProperty({coordinates, times})
 
@@ -106,6 +105,10 @@ export class CesiumDirective implements OnInit, OnDestroy {
 
     for (let i = ANIMATION_FRAME_START; i < coordinates.length; i++) {
       const dataPoint = coordinates[i];
+      if (
+        Math.abs(coordinates[i-1]?.[0] - dataPoint[0]) > 0.01 ||
+        dataPoint[2] < 0
+        ) continue
 
       const time = JulianDate.fromIso8601(times[i]);
       const position = Cartesian3.fromDegrees(dataPoint[0], dataPoint[1], dataPoint[2]);
