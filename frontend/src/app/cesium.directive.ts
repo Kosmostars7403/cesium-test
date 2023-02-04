@@ -15,7 +15,7 @@ import {
 import {of, Subject, switchMap, takeUntil, tap} from 'rxjs';
 import {API_KEY} from './access.token';
 import {CesiumService} from './cesium.service';
-import {GeoResponse, Times} from './models/geo-response.model';
+import {GeoJson, GeoResponse, Times} from './models/geo-response.model';
 
 const ANIMATION_FRAME_START = 28
 
@@ -42,8 +42,8 @@ export class CesiumDirective implements OnInit, OnDestroy {
 
     this.cesiumService.animate$.pipe(
       switchMap(isAnimate => {
-        this.viewer.entities.removeAll();
-        this.viewer.dataSources.removeAll();
+        this.cleanMap()
+
         if (isAnimate) {
           return this.cesiumService.flight$.pipe(
             tap(geometry => {
@@ -52,12 +52,12 @@ export class CesiumDirective implements OnInit, OnDestroy {
             })
           )
         }
+
         return this.cesiumService.geometry$
-          .pipe(tap(async (geometry) => {
-            const geoJSON = await GeoJsonDataSource.load(geometry, { clampToGround: true });
-            const dataSource = await this.viewer.dataSources.add(geoJSON);
-            await this.viewer.flyTo(dataSource);
-          }))
+          .pipe(
+            tap(async (geometry) => {
+              if (geometry) await this.drawGeoJson(geometry)
+            }))
       }),
       takeUntil(this.unsubscribe$)
     ).subscribe()
@@ -71,6 +71,18 @@ export class CesiumDirective implements OnInit, OnDestroy {
     });
 
     this.viewer.scene.primitives.add(createOsmBuildings());
+  }
+
+  private async drawGeoJson(geometry: GeoJson) {
+    const geoJSON = await GeoJsonDataSource.load(geometry)
+    const dataSource = await this.viewer.dataSources.add(geoJSON);
+    const entity = dataSource.entities.values[0];
+
+    for (const point of entity.polyline?.positions?.getValue(new JulianDate())) {
+      this.drawPoint(point, point.x, point.y, point.z)
+    }
+
+    await this.viewer.flyTo(dataSource);
   }
 
   private drawTrajectory({coordinates, times}: GeoResponse) {
@@ -110,16 +122,25 @@ export class CesiumDirective implements OnInit, OnDestroy {
       const time = JulianDate.fromIso8601(times[i]);
       const position = Cartesian3.fromDegrees(dataPoint[0], dataPoint[1], dataPoint[2]);
 
-      this.viewer.entities.add({
-        description: `Location: (${dataPoint[0]}, ${dataPoint[1]}, ${dataPoint[2]})`,
-        position: position,
-        point: {pixelSize: 10, color: Color.RED}
-      });
+      this.drawPoint(position, dataPoint[0], dataPoint[1], dataPoint[2])
 
       positionProperty.addSample(time, position);
     }
 
     return positionProperty
+  }
+
+  private drawPoint(position: Cartesian3, x: number, y:number, z:number) {
+    this.viewer.entities.add({
+      description: `Location: (${x}, ${y}, ${z})`,
+      position,
+      point: {pixelSize: 10, color: Color.RED}
+    });
+  }
+
+  private cleanMap() {
+    this.viewer.entities.removeAll();
+    this.viewer.dataSources.removeAll();
   }
 
   ngOnDestroy() {
