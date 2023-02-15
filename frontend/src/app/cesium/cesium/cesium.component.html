@@ -1,0 +1,29 @@
+<div appCesium class="cesium-container"></div>
+
+<div class="btns-wrapper">
+  <button
+    [disabled]="!(geometry$ | async)"
+    (click)="animate$.next(true)"
+  >
+    Анимированный полет
+  </button>
+
+  <button
+    [disabled]="!(geometry$ | async)"
+    (click)="animate$.next(false)"
+  >
+    Статичная линия
+  </button>
+
+  <input
+    type="file"
+    (change)="onDropFile($any($event.target))"
+  >
+
+  <button
+    (click)="upload()"
+    [disabled]="!kmlFile"
+  >Загрузить
+  </button>
+
+</div>

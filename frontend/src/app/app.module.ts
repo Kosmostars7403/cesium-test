@@ -1,19 +1,24 @@
 import {HttpClientModule} from '@angular/common/http';
 import {NgModule} from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import {RouterModule} from '@angular/router';
 import {API_KEY} from './access.token';
 
 import { AppComponent } from './app.component';
-import { CesiumDirective } from './cesium.directive';
 
 @NgModule({
   declarations: [
     AppComponent,
-    CesiumDirective
   ],
   imports: [
     BrowserModule,
     HttpClientModule,
+    RouterModule.forRoot([
+      {
+        path: 'cesium',
+        loadChildren: () => import('./cesium/cesium.module').then(m => m.CesiumModule)
+      }
+    ])
   ],
   providers: [
     {
