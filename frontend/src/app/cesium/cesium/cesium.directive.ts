@@ -2,6 +2,7 @@ import {Directive, ElementRef, Inject, NgZone, OnDestroy, OnInit} from '@angular
 import {
   CallbackProperty,
   Cartesian3,
+  Cartographic,
   Color,
   ColorMaterialProperty,
   createOsmBuildings,
@@ -12,6 +13,7 @@ import {
   HeightReference,
   Ion,
   JulianDate,
+  Math as CesiumMath,
   PathGraphics,
   PolygonHierarchy,
   SampledPositionProperty,
@@ -19,12 +21,13 @@ import {
   ScreenSpaceEventType,
   TimeInterval,
   TimeIntervalCollection,
-  Viewer,
+  Viewer
 } from 'cesium';
 import {of, Subject, switchMap, takeUntil, tap} from 'rxjs';
 import {API_KEY} from '../../access.token';
 import {CesiumService} from '../../cesium.service';
 import {GeoJson, GeoResponse, Times} from '../../models/geo-response.model';
+import {GeoJsonPreparer} from './geojson-preparer';
 
 const ANIMATION_FRAME_START = 28
 
@@ -37,7 +40,7 @@ export class CesiumDirective implements OnInit, OnDestroy {
 
   unsubscribe$ = new Subject()
 
-  drawingMode: 'line' | 'polygon' = 'line'
+  drawingMode: 'LineString' | 'Polygon' = 'LineString'
 
   activeShapePoints: Cartesian3[] = [];
   activeShape: Entity | undefined;
@@ -64,7 +67,7 @@ export class CesiumDirective implements OnInit, OnDestroy {
 
   drawShape(positionData: any) {
     let shape;
-    if (this.drawingMode === 'line') {
+    if (this.drawingMode === 'LineString') {
       shape = this.viewer.entities.add({
         polyline: {
           positions: positionData,
@@ -72,7 +75,7 @@ export class CesiumDirective implements OnInit, OnDestroy {
           width: 3,
         },
       });
-    } else if (this.drawingMode === 'polygon') {
+    } else if (this.drawingMode === 'Polygon') {
       shape = this.viewer.entities.add({
         polygon: {
           hierarchy: positionData,
@@ -88,12 +91,18 @@ export class CesiumDirective implements OnInit, OnDestroy {
   finishDrawing() {
     this.activeShapePoints.pop();
     const shape = this.drawShape(this.activeShapePoints);
-    if (this.drawingMode === 'polygon') {
-      const hierarchy = shape?.polygon?.hierarchy?.getValue(JulianDate.now())
-      console.log(hierarchy.positions)
+    if (this.drawingMode === 'Polygon') {
+      const {positions} = shape?.polygon?.hierarchy?.getValue(JulianDate.now())
+      const geoJson = new GeoJsonPreparer(this.drawingMode, positions)
+        .toGeoJSon()?.normalizeIntoFeatureCollection()
+      console.log(geoJson)
     } else {
-      console.log(shape?.polyline?.positions?.getValue(JulianDate.now()))
+      const positions = shape?.polyline?.positions?.getValue(JulianDate.now())
+      const geoJson = new GeoJsonPreparer(this.drawingMode, positions)
+        .toGeoJSon()?.normalizeIntoFeatureCollection()
+      console.log(geoJson)
     }
+
     if (this.floatingPoint) this.viewer.entities.remove(this.floatingPoint);
     if (this.activeShape) this.viewer.entities.remove(this.activeShape);
     this.floatingPoint = undefined;
@@ -120,7 +129,7 @@ export class CesiumDirective implements OnInit, OnDestroy {
           this.floatingPoint = this.createPoint(earthPosition);
           this.activeShapePoints.push(earthPosition);
           const dynamicPositions = new CallbackProperty(() => {
-            if (this.drawingMode === 'polygon') {
+            if (this.drawingMode === 'Polygon') {
               return new PolygonHierarchy(this.activeShapePoints);
             }
             return this.activeShapePoints;
